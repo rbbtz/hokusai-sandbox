@@ -1,7 +1,8 @@
 version: 2.1
 
 orbs:
-  hokusai: artsy/hokusai@0.7.2
+  hokusai: artsy/hokusai@dev:7140b0e073a71f7f54959c178c0caec5
+  artsy-remote-docker: artsy/remote-docker@dev:7140b0e073a71f7f54959c178c0caec5
 
 not_staging_or_release: &not_staging_or_release
   filters:
@@ -25,25 +26,44 @@ only_release: &only_release
 workflows:
   default:
     jobs:
-      # pre-staging
+
+
       - hokusai/test:
-          name: test
+          name: build-and-test
+          executor: hokusai/beta
           filename: ./hokusai/test.yml.j2
           <<: *not_staging_or_release
 
-      # staging
       - hokusai/push:
           name: push-staging-image
+          executor: hokusai/beta
           <<: *only_master
           requires:
-            - test
+            - build-and-test
+
+      - artsy-remote-docker/build:
+          <<: *not_staging_or_release
+          context: hokusai
+          executor: hokusai/beta
+          name: remote-build
+
+      - artsy-remote-docker/test:
+          context: hokusai
+          executor: hokusai/beta
+          name: test-remote-build
+          <<: *not_staging_or_release
+          requires:
+            - remote-build
 
       - hokusai/deploy-staging:
           <<: *only_master
+          executor: hokusai/beta
           project-name: hokusai-sandbox
           requires:
-            - push-staging-image
+            - build-and-test
+            - test-remote-build
 
       # release
       - hokusai/deploy-production:
+          executor: hokusai/beta
           <<: *only_release
